@@ -7,8 +7,31 @@ server:
   readTimeout: 10s # 读取超时时间（秒）
   writeTimeout: 10s # 写入超时时间（秒）
   cors:
-    -  "*"
+    - "*"
 log:
   level: "info"
   format: "pretty" # 日志格式: json, pretty, text 生产环境请选择json
   addSource: true
+
+db:
+  postgres:
+    host: "127.0.0.1"
+    port: 15432
+    user: "linsuai"
+    password: "linsu123456"
+    database: "linsu-ai"
+    sslMode: "disable"
+    maxIdleConns: 10
+    maxOpenConns: 100
+    pingTimeout: 5s
+  redis:
+    host: "127.0.0.1"
+    port: 6379
+
+email:
+  host: "smtp.163.com"
+  port: 25
+  username: "linsu_ai@163.com"
+  password: "你的密码"
+  from: "linsu_ai@163.com"
+  baseUrl: "http://localhost:8888"

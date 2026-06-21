@@ -15,6 +15,6 @@ func (u *AuthRouter) Register(engine *gin.Engine) {
 	userGroup := engine.Group("/api/v1/auth")
 	{
 		userHandler := auths.NewHandler()
-		userGroup.GET("/register", userHandler.Register)
+		userGroup.POST("/register", userHandler.Register)
 	}
 }
