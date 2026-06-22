@@ -28,3 +28,18 @@ func (h *Handler) Register(c *gin.Context) {
 	}
 	res.Success(c, resp)
 }
+
+func (h *Handler) VerifyEmail(c *gin.Context) {
+	var reqData VerifyEmailReq
+	if err := req.QueryParam(c, &reqData); err != nil {
+		return
+	}
+
+	_, err := h.service.verifyEmail(reqData.Token)
+	if err != nil {
+		res.Error(c, err)
+		return
+	}
+	//如果成功 直接跳转登录页面
+	c.Redirect(302, "http://localhost:5173/login")
+}
