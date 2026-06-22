@@ -56,3 +56,16 @@ func (h *Handler) Login(c *gin.Context) {
 	}
 	res.Success(c, resp)
 }
+
+func (h *Handler) RefreshToken(c *gin.Context) {
+	var refreshReq RefreshTokenReq
+	if err := req.JsonParam(c, &refreshReq); err != nil {
+		return
+	}
+	resp, err := h.service.refreshToken(refreshReq.RefreshToken)
+	if err != nil {
+		res.Error(c, err)
+		return
+	}
+	res.Success(c, resp)
+}

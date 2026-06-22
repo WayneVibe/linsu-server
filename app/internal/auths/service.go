@@ -244,3 +244,26 @@ func (s *service) token(u *model.User) (*LoginResp, error) {
 		},
 	}, nil
 }
+
+func (s *service) refreshToken(refreshToken string) (*LoginResp, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+	defer cancel()
+	// 解析refreshToken
+	claims, err := jwt.ParseToken(refreshToken)
+	if err != nil {
+		return nil, biz.ErrTokenInvalid
+	}
+	userIdStr := claims.UserId
+	userId, err := uuid.Parse(userIdStr)
+	if err != nil {
+		return nil, biz.ErrTokenInvalid
+	}
+	// 根据用户id查询用户
+	u, err := s.repo.findById(ctx, userId)
+	if err != nil {
+		logs.Errorf("refreshToken findById error: %v", err)
+		return nil, errs.DBError
+	}
+	// 重新生成token和refreshToken
+	return s.token(u)
+}
