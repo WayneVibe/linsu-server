@@ -8,3 +8,8 @@ type RegisterReq struct {
 type VerifyEmailReq struct {
 	Token string `json:"token" form:"token" binding:"required" validate:"required"`
 }
+
+type LoginReq struct {
+	Username string `json:"username" binding:"required"`
+	Password string `json:"password" binding:"required"`
+}

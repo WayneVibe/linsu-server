@@ -16,4 +16,5 @@ type repository interface {
 	saveUser(ctx context.Context, tx *gorm.DB, u *model.User) error
 	findById(ctx context.Context, id uuid.UUID) (*model.User, error)
 	updateUser(ctx context.Context, tx *gorm.DB, u *model.User) error
+	findByUsernameOrEmail(ctx context.Context, username string) (*model.User, error)
 }

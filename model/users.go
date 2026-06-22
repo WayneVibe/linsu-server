@@ -34,3 +34,12 @@ var (
 	UserStatusDisable StatusEnum = 2
 	UserStatusPending StatusEnum = 3 // For users waiting for email verification
 )
+
+type UserDTO struct {
+	Id            uuid.UUID        `json:"id"`
+	Username      string           `json:"username"`
+	Avatar        string           `json:"avatar"`
+	Status        StatusEnum       `json:"status"`
+	LastLoginTime time.Time        `json:"lastLoginTime"`
+	CurrentPlan   SubscriptionPlan `json:"currentPlan"`
+}

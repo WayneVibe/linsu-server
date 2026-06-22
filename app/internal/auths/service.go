@@ -15,6 +15,7 @@ import (
 	"github.com/setcreed/hade-kit/database"
 	"github.com/setcreed/hade-kit/errs"
 	"github.com/setcreed/hade-kit/logs"
+	"github.com/setcreed/hade-kit/tools/jwt"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 
@@ -184,4 +185,62 @@ func (s *service) verifyEmail(token string) (any, error) {
 		return nil, errs.DBError
 	}
 	return nil, nil
+}
+
+func (s *service) login(req LoginReq) (*LoginResp, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+	defer cancel()
+	// 根据用户名或邮箱查询用户
+	u, err := s.repo.findByUsernameOrEmail(ctx, req.Username)
+	if err != nil {
+		logs.Errorf("login findByUsernameOrEmail error: %v", err)
+		return nil, errs.DBError
+	}
+	if u == nil {
+		return nil, biz.ErrUserNotFound
+	}
+	if !u.EmailVerified {
+		return nil, biz.ErrEmailNotVerified
+	}
+	//比对密码
+	password, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+	if err != nil {
+		logs.Errorf("login GenerateFromPassword error: %v", err)
+		return nil, errs.DBError
+	}
+	logs.Infof("password: %s", password)
+	err = bcrypt.CompareHashAndPassword([]byte(u.Password), []byte(req.Password))
+	if err != nil {
+		return nil, biz.ErrPasswordInvalid
+	}
+	return s.token(u)
+}
+
+func (s *service) token(u *model.User) (*LoginResp, error) {
+	// 生成token和refreshToken
+	expire := config.GetConfig().Jwt.GetExpire()
+	refreshExpire := config.GetConfig().Jwt.GetRefresh()
+	token, err := jwt.GenToken(u.Id.String(), u.Username, expire)
+	if err != nil {
+		logs.Errorf("token GenToken error: %v", err)
+		return nil, biz.ErrTokenGen
+	}
+	refreshToken, err := jwt.GenToken(u.Id.String(), u.Username, refreshExpire)
+	if err != nil {
+		logs.Errorf("token GenToken error: %v", err)
+		return nil, biz.ErrTokenGen
+	}
+	return &LoginResp{
+		Expire:        time.Now().Add(expire).UnixMilli(),
+		Token:         token,
+		RefreshExpire: time.Now().Add(refreshExpire).UnixMilli(),
+		RefreshToken:  refreshToken,
+		UserInfo: &model.UserDTO{
+			Id:          u.Id,
+			Username:    u.Username,
+			Avatar:      u.Avatar,
+			Status:      u.Status,
+			CurrentPlan: u.CurrentPlan,
+		},
+	}, nil
 }

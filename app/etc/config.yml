@@ -35,3 +35,8 @@ email:
   password: "你的密码"
   from: "linsu_ai@163.com"
   baseUrl: "http://localhost:8888"
+
+jwt:
+  secret: "linsu-ai"
+  expire: 7h
+  refresh: 240h

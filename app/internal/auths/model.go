@@ -14,6 +14,15 @@ type models struct {
 	db *gorm.DB
 }
 
+func (m *models) findByUsernameOrEmail(ctx context.Context, username string) (*model.User, error) {
+	var user model.User
+	err := m.db.WithContext(ctx).Where("username = ? or email = ?", username, username).First(&user).Error
+	if gorms.IsRecordNotFoundError(err) {
+		return nil, nil
+	}
+	return &user, err
+}
+
 func (m *models) updateUser(ctx context.Context, tx *gorm.DB, u *model.User) error {
 	if tx == nil {
 		tx = m.db

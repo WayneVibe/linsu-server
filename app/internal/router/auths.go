@@ -17,5 +17,6 @@ func (u *AuthRouter) Register(engine *gin.Engine) {
 		userHandler := auths.NewHandler()
 		userGroup.POST("/register", userHandler.Register)
 		userGroup.GET("/verify-email", userHandler.VerifyEmail)
+		userGroup.POST("/login", userHandler.Login)
 	}
 }

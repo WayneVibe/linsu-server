@@ -43,3 +43,16 @@ func (h *Handler) VerifyEmail(c *gin.Context) {
 	//如果成功 直接跳转登录页面
 	c.Redirect(302, "http://localhost:5173/login")
 }
+
+func (h *Handler) Login(c *gin.Context) {
+	var loginReq LoginReq
+	if err := req.JsonParam(c, &loginReq); err != nil {
+		return
+	}
+	resp, err := h.service.login(loginReq)
+	if err != nil {
+		res.Error(c, err)
+		return
+	}
+	res.Success(c, resp)
+}
