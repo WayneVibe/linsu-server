@@ -19,5 +19,8 @@ func (u *AuthRouter) Register(engine *gin.Engine) {
 		userGroup.GET("/verify-email", userHandler.VerifyEmail)
 		userGroup.POST("/login", userHandler.Login)
 		userGroup.POST("/refresh-token", userHandler.RefreshToken)
+		userGroup.POST("/forgot-password", userHandler.ForgetPassword)
+		userGroup.POST("/verify-code", userHandler.VerifyCode)
+		userGroup.POST("/reset-password", userHandler.ResetPassword)
 	}
 }

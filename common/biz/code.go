@@ -11,4 +11,7 @@ var (
 	ErrEmailNotVerified = errs.NewError(10006, "邮箱未验证")
 	ErrPasswordInvalid  = errs.NewError(10007, "密码错误")
 	ErrTokenGen         = errs.NewError(10008, "token生成失败")
+	ErrCodeGen          = errs.NewError(10009, "验证码生成失败")
+	ErrCodeInvalid      = errs.NewError(10010, "验证码错误")
+	ErrEmailNotMatch    = errs.NewError(10011, "邮箱不匹配")
 )

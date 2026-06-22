@@ -14,3 +14,8 @@ type LoginResp struct {
 	RefreshToken  string         `json:"refreshToken"`
 	RefreshExpire int64          `json:"refreshExpire"`
 }
+
+type VerifyCodeResp struct {
+	Message string `json:"message"`
+	Token   string `json:"token"`
+}

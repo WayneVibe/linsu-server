@@ -69,3 +69,41 @@ func (h *Handler) RefreshToken(c *gin.Context) {
 	}
 	res.Success(c, resp)
 }
+
+func (h *Handler) ForgetPassword(c *gin.Context) {
+	var forgetReq ForgetPasswordReq
+	if err := req.JsonParam(c, &forgetReq); err != nil {
+		return
+	}
+	resp, err := h.service.forgotPassword(forgetReq)
+	if err != nil {
+		res.Error(c, err)
+		return
+	}
+	res.Success(c, resp)
+}
+
+func (h *Handler) VerifyCode(c *gin.Context) {
+	var verifyCodeReq VerifyCodeReq
+	if err := req.JsonParam(c, &verifyCodeReq); err != nil {
+		return
+	}
+	resp, err := h.service.verifyCode(verifyCodeReq)
+	if err != nil {
+		res.Error(c, err)
+		return
+	}
+	res.Success(c, resp)
+}
+func (h *Handler) ResetPassword(c *gin.Context) {
+	var resetReq ResetPasswordReq
+	if err := req.JsonParam(c, &resetReq); err != nil {
+		return
+	}
+	resp, err := h.service.resetPassword(c, resetReq)
+	if err != nil {
+		res.Error(c, err)
+		return
+	}
+	res.Success(c, resp)
+}
