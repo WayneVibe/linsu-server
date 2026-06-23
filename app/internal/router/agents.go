@@ -9,7 +9,7 @@ import (
 type AgentRouter struct {
 }
 
-func (u *AgentRouter) Register(engine *gin.Engine) {
+func (a *AgentRouter) Register(engine *gin.Engine) {
 	agentsGroup := engine.Group("/api/v1/agents")
 	{
 		agentsHandler := agents.NewHandler()
