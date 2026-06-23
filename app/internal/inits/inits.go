@@ -19,5 +19,6 @@ func Init(s *server.Server, conf *config.Config) {
 	s.RegisterRouters(
 		&router.Event{},
 		&router.AuthRouter{},
+		&router.AgentRouter{},
 	)
 }
