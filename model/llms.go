@@ -25,6 +25,12 @@ var (
 	LLMTypeVision    LLMType = "vision"    // 图像模型
 )
 
+var (
+	OllamaProvider = "ollama"
+	OpenAIProvider = "openai"
+	QwenProvider   = "qwen"
+)
+
 // ProviderConfig 定义了厂商配置
 // 包含提供商名称、API地址、API秘钥、状态等大模型厂商的信息
 type ProviderConfig struct {

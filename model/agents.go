@@ -83,3 +83,70 @@ func DefaultAgent(userId uuid.UUID, name string, description string, status Agen
 		InvocationCount:    0,
 	}
 }
+
+// ModelParams 定义了模型参数的结构
+type ModelsParams struct {
+	// MaxTokens 最大生成长度（单位：Token）。
+	// 限制 AI 回复的最大长度，不包含输入的 Prompt 长度。
+	// 注意：(Input Tokens + MaxTokens) 不能超过模型的上下文窗口上限。
+	MaxTokens int `json:"maxTokens"`
+	// 控制模型输出的随机性。
+	// - 0.0: 几乎是确定性的，每次运行结果基本相同（适合代码生成、数学解题）。
+	// - 1.0+: 增加多样性，甚至可能产生幻觉（适合创意写作）。
+	Temperature float64 `json:"temperature"`
+	// TopP (核采样 / Nucleus Sampling)
+	// 模型只考虑累积概率达到 TopP 的 Token 集合。
+	// 例如 0.1 意味着只考虑概率最高的顶层 10% 的词汇。
+	// *最佳实践*：一般建议修改 Temperature 或 TopP 其中之一，而不是同时修改。
+	TopP float64 `json:"topP"`
+	// N (生成数量)
+	// 针对同一条提示词，一次性生成多少条独立的回复。
+	// 适用于需要从多个结果中进行优选的场景。
+	N int `json:"n"`
+	// Stop (停止词)
+	// 一个字符串或字符串数组。
+	// 一旦模型生成的文本中包含该序列，生成过程将立即终止，且返回结果不包含该停止词。
+	Stop []any `json:"stop"`
+	// PresencePenalty (话题新鲜度惩罚)
+	// 基于 Token "是否已经出现过" 进行惩罚（不考虑出现次数）。
+	// 值越大，模型越倾向于转换话题，避免在同一个概念上打转。
+	PresencePenalty float64 `json:"presencePenalty"`
+	// FrequencyPenalty (重复度惩罚)
+	// 基于 Token "出现的频次" 进行惩罚。
+	// 值越大，模型越排斥逐字逐句地重复之前生成过的文本（减少复读机现象）。
+	FrequencyPenalty float64 `json:"frequencyPenalty"`
+}
+
+func (j JSON) ToModelParams() ModelsParams {
+	params := ModelsParams{}
+
+	if maxTokens, ok := j["maxTokens"].(float64); ok {
+		params.MaxTokens = int(maxTokens)
+	}
+
+	if temperature, ok := j["temperature"].(float64); ok {
+		params.Temperature = temperature
+	}
+
+	if topP, ok := j["topP"].(float64); ok {
+		params.TopP = topP
+	}
+
+	if n, ok := j["n"].(float64); ok {
+		params.N = int(n)
+	}
+
+	if stop, ok := j["stop"].([]any); ok {
+		params.Stop = stop
+	}
+
+	if presencePenalty, ok := j["presencePenalty"].(float64); ok {
+		params.PresencePenalty = presencePenalty
+	}
+
+	if frequencyPenalty, ok := j["frequencyPenalty"].(float64); ok {
+		params.FrequencyPenalty = frequencyPenalty
+	}
+
+	return params
+}

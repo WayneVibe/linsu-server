@@ -48,7 +48,7 @@ func (m *models) createAgent(ctx context.Context, agent *model.Agent) error {
 	return m.db.WithContext(ctx).Create(agent).Error
 }
 
-func newModel(db *gorm.DB) *models {
+func newModels(db *gorm.DB) *models {
 	return &models{db: db}
 }
 

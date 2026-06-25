@@ -17,5 +17,6 @@ var (
 )
 
 var (
-	AgentNotFound = errs.NewError(20001, "Agent不存在")
+	AgentNotFound             = errs.NewError(20001, "Agent不存在")
+	ErrProviderConfigNotFound = errs.NewError(20002, "ProviderConfig不存在")
 )

@@ -32,3 +32,9 @@ type UpdateAgentReq struct {
 	ModelParameters model.JSON        `json:"modelParameters"`
 	OpeningDialogue string            `json:"openingDialogue"`
 }
+
+type AgentMessageReq struct {
+	AgentID   uuid.UUID  `json:"agentId"`
+	Message   string     `json:"message"`
+	SessionId *uuid.UUID `json:"sessionId,omitempty"`
+}

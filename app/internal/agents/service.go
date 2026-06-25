@@ -2,15 +2,28 @@ package agents
 
 import (
 	"context"
-	"model"
+	"core/ai"
+	"errors"
 	"time"
 
+	"github.com/cloudwego/eino-ext/components/model/ollama"
+	"github.com/cloudwego/eino-ext/components/model/openai"
+	"github.com/cloudwego/eino-ext/components/model/qwen"
+	"github.com/cloudwego/eino/adk"
+	"github.com/cloudwego/eino/adk/prebuilt/supervisor"
+	aiModel "github.com/cloudwego/eino/components/model"
+	"github.com/cloudwego/eino/components/prompt"
+	"github.com/cloudwego/eino/schema"
+	"github.com/eino-contrib/ollama/api"
 	"github.com/google/uuid"
 	"github.com/setcreed/hade-kit/database"
 	"github.com/setcreed/hade-kit/errs"
+	"github.com/setcreed/hade-kit/event"
 	"github.com/setcreed/hade-kit/logs"
 
+	"app/shared"
 	"common/biz"
+	"model"
 )
 
 type service struct {
@@ -19,7 +32,7 @@ type service struct {
 
 func newService() *service {
 	return &service{
-		repo: newModel(database.GetPostgresDB().GormDB),
+		repo: newModels(database.GetPostgresDB().GormDB),
 	}
 }
 
@@ -114,4 +127,252 @@ func (s *service) updateAgent(ctx context.Context, userId uuid.UUID, req UpdateA
 		return nil, errs.DBError
 	}
 	return agent, nil
+}
+
+func (s *service) agentMessage(ctx context.Context, userID uuid.UUID, req AgentMessageReq) (<-chan string, <-chan error) {
+	dataChan := make(chan string)
+	errChan := make(chan error)
+	go func() {
+		//defer中 关闭channel和处理错误
+		defer func() {
+			if err := recover(); err != nil {
+				logs.Errorf("处理智能代理消息失败: %v", err)
+				select {
+				case errChan <- errors.New("internal server error"):
+				case <-ctx.Done():
+					logs.Warnf("发送取消 context Done")
+				}
+			}
+			close(dataChan)
+			close(errChan)
+		}()
+		//先获取agent
+		agent, err := s.repo.getAgent(ctx, userID, req.AgentID)
+		if err != nil {
+			logs.Errorf("查询智能代理失败: %v", err)
+			//告诉客户端,这里我们封装一下消息
+			s.sendError(ctx, errChan, err)
+			return
+		}
+
+		mainAgent, err := s.buildMainAgent(ctx, agent, req.Message, dataChan)
+		if err != nil {
+			logs.Errorf("构建主智能体失败: %v", err)
+			s.sendError(ctx, errChan, err)
+			return
+		}
+		supervisorAgent, err := supervisor.New(ctx, &supervisor.Config{
+			Supervisor: mainAgent,
+			SubAgents:  []adk.Agent{},
+		})
+		if err != nil {
+			logs.Errorf("构建supervisorAgent失败: %v", err)
+			s.sendError(ctx, errChan, err)
+			return
+		}
+		// 构建Runner
+		runner := adk.NewRunner(ctx, adk.RunnerConfig{
+			Agent:           supervisorAgent,
+			EnableStreaming: true,
+		})
+		iter := runner.Query(ctx, req.Message)
+		for {
+			events, ok := iter.Next()
+			if !ok {
+				break
+			}
+			select {
+			case <-ctx.Done():
+				logs.Warnf("客户端取消了请求: %v", ctx.Err())
+				return
+			default:
+			}
+			if events.Err != nil {
+				s.sendData(ctx, dataChan, ai.BuildErrMessage(events.AgentName, events.Err.Error()))
+				return
+			}
+			if events.Output != nil && events.Output.MessageOutput != nil {
+				msg, err := events.Output.MessageOutput.GetMessage()
+				if err != nil {
+					logs.Errorf("获取模型内容返回失败: %v", err)
+					s.sendError(ctx, errChan, err)
+					return
+				}
+				if msg.Content == "" && msg.ReasoningContent == "" {
+					continue
+				}
+				if msg.ReasoningContent != "" {
+					s.sendData(ctx, dataChan, ai.BuildReasoningMessage(events.AgentName, msg.ToolName, msg.ReasoningContent))
+				}
+				logs.Infof("Agent名称: [%s], 工具名称: [%s], 模型返回内容: %s", events.AgentName, msg.ToolName, msg.Content)
+				if msg.Content != "" {
+					s.sendData(ctx, dataChan, ai.BuildMessage(events.AgentName, msg.ToolName, msg.Content))
+				}
+			}
+		}
+	}()
+
+	return dataChan, errChan
+}
+
+func (s *service) sendError(ctx context.Context, errChan chan error, err error) {
+	select {
+	case errChan <- err:
+	case <-ctx.Done():
+		logs.Warnf("发送取消 context Done")
+	}
+}
+
+func (s *service) sendData(ctx context.Context, dataChan chan string, data string) {
+	select {
+	case dataChan <- data:
+	case <-ctx.Done():
+		logs.Warnf("sendData 发送取消 context Done")
+	}
+}
+
+func (s *service) buildMainAgent(ctx context.Context, agent *model.Agent, message string,
+	dataChan chan string) (adk.Agent, error) {
+	// 构建主智能体
+	//首先需要获取到agent的模型配置信息
+	providerConfig, err := s.getProviderConfig(ctx, model.LLMTypeChat, agent.ModelProvider, agent.ModelName)
+	if err != nil {
+		return nil, errs.DBError
+	}
+	if providerConfig == nil {
+		return nil, biz.ErrProviderConfigNotFound
+	}
+
+	//构建chatmodel，因为这里有很多厂商，所以这里要适配
+	chatModel, err := s.buildToolCallingChatModel(ctx, agent, providerConfig)
+	if err != nil {
+		logs.Errorf("构建chatmodel失败: %v", err)
+		return nil, err
+	}
+	modelAgent, err := adk.NewChatModelAgent(ctx, &adk.ChatModelAgentConfig{
+		Model:       chatModel,
+		Name:        agent.Name,
+		Description: agent.Description,
+		Instruction: ai.BaseSystemPrompt, //这是我们定义的系统提示词
+		GenModelInput: func(ctx context.Context, instruction string, input *adk.AgentInput) ([]adk.Message, error) {
+			// 这是在最终发送大模型前做一些处理 一般是重新构建系统提示词
+			template := prompt.FromMessages(schema.FString, schema.SystemMessage(ai.BaseSystemPrompt))
+			messages, err2 := template.Format(ctx, map[string]any{
+				"role":       agent.SystemPrompt,
+				"ragContext": "",
+				"toolsInfo":  "",
+				"agentsInfo": "",
+			})
+			if err2 != nil {
+				logs.Errorf("格式化模板失败: %v", err2)
+				return nil, err2
+			}
+			messages = append(messages, input.Messages...)
+			return messages, nil
+		},
+	})
+	if err != nil {
+		logs.Errorf("构建ChatModelAgent失败: %v", err)
+		return nil, err
+	}
+	return modelAgent, nil
+}
+
+func (s *service) getProviderConfig(ctx context.Context, chat model.LLMType, provider string,
+	name string) (*model.ProviderConfig, error) {
+	//这个需要调用llms服务 所以我们需要定义event事件
+	trigger, err := event.Trigger("getProviderConfig", &shared.GetProviderConfigsRequest{
+		Provider:  provider,
+		ModelName: name,
+		LLMType:   chat,
+	})
+	if err != nil {
+		logs.Errorf("触发getProviderConfig事件失败: %v", err)
+		return nil, errs.DBError
+	}
+	return trigger.(*model.ProviderConfig), nil
+}
+
+func (s *service) buildToolCallingChatModel(ctx context.Context, agent *model.Agent,
+	config *model.ProviderConfig) (aiModel.ToolCallingChatModel, error) {
+	var chatModel aiModel.ToolCallingChatModel
+	var err error
+	modelParams := agent.ModelParameters.ToModelParams()
+	temperature := float32(modelParams.Temperature)
+	topP := float32(modelParams.TopP)
+	maxTokens := modelParams.MaxTokens
+	if config.Provider == model.OllamaProvider {
+		chatModel, err = ollama.NewChatModel(ctx, &ollama.ChatModelConfig{
+			Model:   agent.ModelName,
+			BaseURL: config.APIBase,
+			Options: &api.Options{
+				Temperature: temperature,
+				TopP:        topP,
+				Runner: api.Runner{
+					NumCtx: maxTokens,
+				},
+			},
+		})
+	} else if config.Provider == model.OpenAIProvider {
+		chatModel, err = openai.NewChatModel(ctx, &openai.ChatModelConfig{
+			Model:               agent.ModelName,
+			BaseURL:             config.APIBase,
+			APIKey:              config.APIKey,
+			MaxCompletionTokens: &maxTokens,
+			Temperature:         &temperature,
+			TopP:                &topP,
+		})
+	} else if config.Provider == model.QwenProvider {
+		chatModel, err = qwen.NewChatModel(ctx, &qwen.ChatModelConfig{
+			Model:       agent.ModelName,
+			BaseURL:     config.APIBase,
+			APIKey:      config.APIKey,
+			MaxTokens:   &maxTokens,
+			Temperature: &temperature,
+			TopP:        &topP,
+		})
+	} else {
+		//默认用openai，大部分厂商都支持openai的方式
+		chatModel, err = openai.NewChatModel(ctx, &openai.ChatModelConfig{
+			Model:               agent.ModelName,
+			BaseURL:             config.APIBase,
+			APIKey:              config.APIKey,
+			MaxCompletionTokens: &maxTokens,
+			Temperature:         &temperature,
+			TopP:                &topP,
+		})
+	}
+
+	return chatModel, err
+}
+
+func (s *service) deleteAgent(ctx context.Context, id uuid.UUID) error {
+	//err := s.repo.transaction(ctx, func(tx *gorm.DB) error {
+	//	err := s.repo.deleteAgent(ctx, id)
+	//	if err != nil {
+	//		return err
+	//	}
+	//	err = s.repo.deleteAgentTools(ctx, id)
+	//	if err != nil {
+	//		return err
+	//	}
+	//	err = s.repo.deleteAgentKnowledgeBaseByAgentId(ctx, id)
+	//	if err != nil {
+	//		return err
+	//	}
+	//	err = s.repo.deleteAgentAgentByAgentId(ctx, id)
+	//	if err != nil {
+	//		return err
+	//	}
+	//	err = s.repo.deleteAgentWorkflowByAgentId(ctx, id)
+	//	if err != nil {
+	//		return err
+	//	}
+	//	return nil
+	//})
+	//if err != nil {
+	//	logs.Errorf("deleteAgent 删除agent失败: %v", err)
+	//	return errs.DBError
+	//}
+	return nil
 }

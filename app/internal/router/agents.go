@@ -17,6 +17,8 @@ func (a *AgentRouter) Register(engine *gin.Engine) {
 		agentsGroup.POST("/list", agentsHandler.ListAgents)
 		agentsGroup.GET("/:id", agentsHandler.GetAgent)
 		agentsGroup.PUT("/update", agentsHandler.UpdateAgent)
+		agentsGroup.DELETE("/:id", agentsHandler.DeleteAgent)
+		agentsGroup.POST("/chat", agentsHandler.AgentMessage)
 	}
 
 }

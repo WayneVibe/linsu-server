@@ -1,8 +1,15 @@
 package router
 
+import (
+	"github.com/setcreed/hade-kit/event"
+
+	"app/internal/llms"
+)
+
 type Event struct {
 }
 
 func (*Event) Register() {
-	// TODO: 注册事件相关路由
+	llmService := llms.NewPublicService()
+	event.Register("getProviderConfig", llmService.GetProviderConfig)
 }

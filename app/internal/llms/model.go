@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/google/uuid"
+	"github.com/setcreed/hade-kit/gorms"
 	"gorm.io/gorm"
 
 	"model"
@@ -11,6 +12,15 @@ import (
 
 type models struct {
 	db *gorm.DB
+}
+
+func (m *models) getProviderConfig(ctx context.Context, provider string) (*model.ProviderConfig, error) {
+	var pc model.ProviderConfig
+	err := m.db.WithContext(ctx).Where("name = ? ", provider).First(&pc).Error
+	if gorms.IsRecordNotFoundError(err) {
+		return nil, nil
+	}
+	return &pc, err
 }
 
 func (m *models) listLLMs(ctx context.Context, userID uuid.UUID, filter LLMFilter) ([]*model.LLM, int64, error) {
@@ -52,7 +62,7 @@ func (m *models) createProviderConfig(ctx context.Context, pc *model.ProviderCon
 	return m.db.WithContext(ctx).Create(pc).Error
 }
 
-func newModel(db *gorm.DB) *models {
+func newModels(db *gorm.DB) *models {
 	return &models{db: db}
 }
 

@@ -18,7 +18,7 @@ type service struct {
 
 func newService() *service {
 	return &service{
-		repo: newModel(database.GetPostgresDB().GormDB),
+		repo: newModels(database.GetPostgresDB().GormDB),
 	}
 }
 
